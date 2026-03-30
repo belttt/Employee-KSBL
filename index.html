@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bravo Board Mobile</title>
+    <!-- Google Font & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <style>
+        body { font-family: 'Kanit', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body class="bg-gray-50 pb-24">
+
+<div id="app">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white shadow-sm px-4 py-3 flex justify-between items-center">
+        <h1 class="text-xl font-bold text-indigo-600 uppercase tracking-wider">👏 Bravo Board</h1>
+        <div class="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full font-bold">
+            {{ loading ? 'Updating...' : 'Online' }}
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto p-4">
+        
+        <!-- 1. หน้า FEED (หน้าหลัก) -->
+        <div v-if="activeTab === 'feed'" class="space-y-4">
+            <h2 class="text-lg font-bold text-gray-800 mb-2">กิจกรรมล่าสุด</h2>
+            <div v-if="logs.length === 0" class="text-center py-10 text-gray-400">ยังไม่มีการชมเชยในขณะนี้</div>
+            <div v-for="log in logs" class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 transform active:scale-95 transition">
+                <div class="flex items-center mb-2">
+                    <div class="w-10 h-10 bg-indigo-500 text-white rounded-full flex items-center justify-center font-bold mr-3">
+                        {{ log.sender[0] }}
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-gray-800">{{ log.sender }}</p>
+                        <p class="text-xs text-gray-400">ส่งคำชมให้</p>
+                    </div>
+                </div>
+                <div class="bg-orange-50 p-3 rounded-xl mb-2">
+                    <p class="text-gray-700 text-sm">
+                        ชมคุณ <span class="font-bold text-indigo-600">{{ log.receiver }}</span> 
+                        <span class="ml-2 inline-block bg-orange-400 text-white text-[10px] px-2 py-0.5 rounded-full">+{{ log.points }} แต้ม</span>
+                    </p>
+                    <p class="text-gray-600 italic text-sm mt-1">"{{ log.message }}"</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. หน้า GIVE (ส่งคะแนน) -->
+        <div v-if="activeTab === 'give'" class="space-y-6">
+            <h2 class="text-xl font-bold text-gray-800">ส่งความชื่นชม ✨</h2>
+            <div class="bg-white p-6 rounded-3xl shadow-lg space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">ชมเชยคุณ...</label>
+                    <select v-model="form.receiverName" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                        <option value="">เลือกรายชื่อเพื่อน</option>
+                        <option v-for="user in users" :value="user.name">{{ user.name }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">เหตุผลความดี</label>
+                    <textarea v-model="form.message" rows="3" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="บอกข้อดีของเพื่อนสักนิด..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">ให้คะแนน (1-10)</label>
+                    <input type="range" min="1" max="10" v-model.number="form.points" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    <div class="text-center font-bold text-2xl text-indigo-600 mt-2">{{ form.points }}</div>
+                </div>
+                <button @click="submitData" :disabled="submitting" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-indigo-200 shadow-xl active:bg-indigo-700 disabled:bg-gray-300">
+                    <span v-if="!submitting">ส่งเลย!</span>
+                    <span v-else><i class="fas fa-spinner fa-spin"></i> กำลังส่ง...</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. หน้า LEADERBOARD -->
+        <div v-if="activeTab === 'rank'" class="space-y-4">
+            <h2 class="text-lg font-bold text-gray-800">🏆 อันดับพนักงานคนเก่ง</h2>
+            <div class="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div v-for="(user, index) in sortedUsers" class="flex items-center justify-between p-4 border-b border-gray-50">
+                    <div class="flex items-center">
+                        <span class="w-6 font-bold text-gray-300">{{ index + 1 }}</span>
+                        <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mr-3 font-bold text-gray-500">
+                            {{ user.name[0] }}
+                        </div>
+                        <span class="font-medium text-gray-700">{{ user.name }}</span>
+                    </div>
+                    <span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-xs font-bold">
+                        {{ user.points }} แต้ม
+                    </span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (สำคัญสำหรับ Mobile) -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center safe-area-bottom shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+        <button @click="activeTab = 'feed'" :class="activeTab === 'feed' ? 'text-indigo-600' : 'text-gray-400'" class="flex-1 py-3 transition">
+            <i class="fas fa-home text-xl block mb-1"></i>
+            <span class="text-[10px]">หน้าหลัก</span>
+        </button>
+        <button @click="activeTab = 'give'" :class="activeTab === 'give' ? 'text-indigo-600' : 'text-gray-400'" class="flex-1 py-3 transition">
+            <div class="bg-indigo-600 text-white w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-1 shadow-lg -mt-8 border-4 border-white">
+                <i class="fas fa-plus"></i>
+            </div>
+            <span class="text-[10px]">ชมเพื่อน</span>
+        </button>
+        <button @click="activeTab = 'rank'" :class="activeTab === 'rank' ? 'text-indigo-600' : 'text-gray-400'" class="flex-1 py-3 transition">
+            <i class="fas fa-trophy text-xl block mb-1"></i>
+            <span class="text-[10px]">อันดับ</span>
+        </button>
+    </nav>
+</div>
+
+<script>
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzJoRZeIr0lz3oVHAndZ70jWxMZteQl9B9bdTcpGRQhIBOhL1sBri7L1qDhjngOuzmt/exec';
+
+    const { createApp, ref, onMounted, computed } = Vue
+    createApp({
+        setup() {
+            const users = ref([]);
+            const logs = ref([]);
+            const loading = ref(true);
+            const submitting = ref(false);
+            const activeTab = ref('feed');
+            const form = ref({ receiverName: '', message: '', points: 5 });
+
+            const fetchData = async () => {
+                try {
+                    const res = await fetch(API_URL);
+                    const data = await res.json();
+                    users.value = data.users;
+                    logs.value = data.logs;
+                } catch (e) { console.error("Error loading data"); }
+                finally { loading.value = false; }
+            };
+
+            const submitData = async () => {
+                if(!form.value.receiverName || !form.value.message) return alert('กรุณาเลือกชื่อเพื่อนและพิมพ์คำชม');
+                if(form.value.points > 10) return alert('ให้ได้สูงสุด 10 แต้ม');
+                
+                submitting.value = true;
+                try {
+                    await fetch(API_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', // สำคัญสำหรับ Google Apps Script
+                        body: JSON.stringify({
+                            sender: 'พนักงานทดสอบ', // ในอนาคตใช้ชื่อจาก Login
+                            receiverName: form.value.receiverName,
+                            points: form.value.points,
+                            message: form.value.message
+                        })
+                    });
+                    
+                    alert('ส่งความชื่นชมสำเร็จแล้ว!');
+                    form.value = { receiverName: '', message: '', points: 5 };
+                    activeTab.value = 'feed'; // ส่งเสร็จกลับไปหน้าฟีด
+                    setTimeout(fetchData, 1500); // รอ Script อัปเดตแล้วดึงข้อมูลใหม่
+                } catch (e) { alert('เกิดข้อผิดพลาด'); }
+                finally { submitting.value = false; }
+            };
+
+            const sortedUsers = computed(() => [...users.value].sort((a,b) => b.points - a.points));
+
+            onMounted(fetchData);
+
+            return { users, logs, loading, form, submitData, sortedUsers, submitting, activeTab }
+        }
+    }).mount('#app')
+</script>
+</body>
+</html>
